@@ -1,0 +1,19 @@
+{
+  "name": "proyecto1_redes",
+  "version": "1.0.0",
+  "description": "Servidor Para XMPP",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@xmpp/client": "^0.13.1",
+    "@xmpp/component": "^0.13.1",
+    "@xmpp/debug": "^0.13.0",
+    "@xmpp/xml": "^0.13.1",
+    "nodemon": "^3.0.1"
+  }
+}
