@@ -13,9 +13,8 @@ const rl = readline.createInterface({
 function menu() {
   console.log('1) Registrar una nueva cuenta en el servidor')
   console.log('2) Iniciar sesión con una cuenta')
-  console.log('3) Cerrar sesión con una cuenta')
-  console.log('4) Eliminar la cuenta del servidor')
-  console.log('5) Salir')
+  console.log('3) Eliminar la cuenta del servidor')
+  console.log('4) Salir del programa')
   rl.question('Elige una opción: ', (answer) => {
     handleMenuOption(answer)
   })
@@ -38,14 +37,16 @@ function handleMenuOption(option) {
       })
       break
     case '3':
-      // Aquí deberías añadir la lógica para cerrar la sesión con la cuenta
+      rl.question('Introduce el ID para la cuenta: ', (jid) => {
+        rl.question('Introduce la contraseña para la cuenta: ', (password) => {
+          deleteAccount(jid, password)
+        })
+      })
       break
     case '4':
-      // Aquí deberías añadir la lógica para eliminar la cuenta del servidor
-      break
-    case '5':
-      rl.close()
-      break
+      console.log('Saliendo del programa...')
+      process.exit(0)
+
     default:
       console.log('Opción no válida. Por favor, elige una opción válida.')
       menu()
@@ -141,5 +142,61 @@ async function login(jid, password) {
 
   xmpp.start().catch(console.error)
 }
+
+async function deleteAccount(jid, password) {
+  const xmpp = client({
+    service: 'xmpp://alumchat.xyz:5222',
+    domain: 'alumchat.xyz',
+    username: jid, 
+    password: password,
+    terminal: true,
+  })
+
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
+  debug(xmpp, true)
+
+  xmpp.on('stanza', async (stanza) => {
+    console.log('Received stanza:', stanza.toString());
+
+    if (stanza.is('iq') && stanza.attrs.type === 'result') {
+      console.log('🗸', 'Successfully deleted account')
+      
+    }
+  })
+
+  xmpp.on('error', (err) => {
+    console.error('❌', err.toString())
+  })
+
+  xmpp.on('online', async () => {
+    console.log('▶', 'online as', xmpp.jid.toString(), '\n')
+
+    const deleteStanza = xml(
+      'iq',
+      { type: 'set', id: 'delete1' },
+      xml('query', { xmlns: 'jabber:iq:register' }, xml('remove'))
+    )
+    try{
+
+      await xmpp.send(deleteStanza)
+    }
+    catch(err){
+      console.log(err)
+    }finally{
+      
+      await xmpp.stop()
+    }
+  })
+
+  xmpp.on('offline', () => {
+    xmpp.stop()
+    console.log('⏹', 'offline')
+    menu()
+  })
+
+  xmpp.start().catch(console.error)
+}
+
 
 menu()
