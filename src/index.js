@@ -1,7 +1,9 @@
 const { client, xml, jid } = require("@xmpp/client")
+const parse = require("@xmpp/xml/lib/parse");
 const net = require('net')
 const debug = require("@xmpp/debug")
 const readline = require('readline')
+const messageQueue = []
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -18,8 +20,6 @@ function menu() {
     handleMenuOption(answer)
   })
 }
-
-
 
 function handleMenuOption(option) {
   switch (option) {
@@ -104,43 +104,42 @@ async function login(jid, password) {
 
   debug(xmpp, true)
 
-  await xmpp.start()
+  xmpp.on('stanza', async (stanza) => {
+    console.log('Received stanza:', stanza.toString());
 
-  xmpp.on('error', err => {
-    console.error('❌', err.toString())
+    if (stanza.is('message')) {
+      // Agregar el mensaje a la cola en lugar de procesarlo inmediatamente
+      messageQueue.push(stanza);
+    }
+    else if (stanza.is('presence') && stanza.attrs.from === xmpp.jid.toString()) {
+      console.log('🗸', 'Successfully logged in')
+      //menu()
+      // Cambiar a segundo menu de comunicacion
+    }
+    // staza = stanza: <iq type="get" id="695-32514" to="car20593xx@alumchat.xyz/6thtpmnl4k" from="alumchat.xyz"><query xmlns="jabber:iq:version"/></iq>
+    else if (stanza.is('iq') && stanza.attrs.type === 'get' && stanza.getChild('query', 'jabber:iq:version')) {
+      const reply = xml('iq', {type: 'result', id: stanza.attrs.id, to: stanza.attrs.from}, xml('query', {xmlns: 'jabber:iq:version'}, xml('name', {}, 'NodeJS XMPP Client'), xml('version', {}, '1.0.0')))
+    
+      xmpp.send(reply);
+      
+
+    }
+
+  })
+  xmpp.on('online', async (address) => {
+    console.log('▶', 'online as', address.toString())
+    await xmpp.send(xml('presence'))
+  })
+
+  xmpp.on('error', (err) => {
+    console.error('\n\n❌', err.toString())
   })
 
   xmpp.on('offline', () => {
     console.log('⏹', 'offline')
   })
 
-  xmpp.on('stanza', async stanza => {
-    if (stanza.is('iq') && stanza.attrs.type === 'get' && stanza.getChild('query', 'jabber:iq:version')) {
-      const reply = new xml.Element('iq', {
-          type: 'result',
-          id: stanza.attrs.id,
-          to: stanza.attrs.from
-      }).c('query', { xmlns: 'jabber:iq:version' })
-        .c('name').t('My XMPP Client').up()
-        .c('version').t('1.0.0').up()
-        .c('os').t('My OS');
-      
-      xmpp.send(reply);
-  }
-    if (stanza.is('presence') && stanza.attrs.from === xmpp.jid.toString()) {
-      console.log('🗸', 'Successfully logged in')
-      menu()
-    }
-  })
-
-  xmpp.on('online', async address => {
-    console.log('▶', 'online as', address.toString())
-    await xmpp.send(xml('presence'))
-  })
-
-  // await xmpp.stop()
-  
-  //await xmpp.start({ username: jid, password: password})
+  xmpp.start().catch(console.error)
 }
 
 menu()
