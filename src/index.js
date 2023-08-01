@@ -1,9 +1,10 @@
 const { client, xml, jid } = require("@xmpp/client")
-const parse = require("@xmpp/xml/lib/parse");
+const parse = require("@xmpp/xml/lib/parse")
 const net = require('net')
 const debug = require("@xmpp/debug")
 const readline = require('readline')
 const messageQueue = []
+
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -15,10 +16,11 @@ function menu() {
   console.log('2) Iniciar sesión con una cuenta')
   console.log('3) Eliminar la cuenta del servidor')
   console.log('4) Salir del programa')
-  rl.question('Elige una opción: ', (answer) => {
+  rl.question('\nElige una opción: ', (answer) => {
     handleMenuOption(answer)
   })
 }
+
 
 function handleMenuOption(option) {
   switch (option) {
@@ -98,12 +100,73 @@ async function login(jid, password) {
     domain: 'alumchat.xyz',
     username: jid, 
     password: password,
-    terminal: true,
+    // terminal: true,
   })
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
   debug(xmpp, true)
+
+  
+  const secondMenu = ()=> {
+    const rl2 = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    console.log('\n');
+    console.log('1) Mostrar todos los contactos y su estado');
+    console.log('2) Agregar un usuario a los contactos');
+    console.log('3) Mostrar detalles de contacto de un usuario');
+    console.log('4) Comunicación 1 a 1 con cualquier usuario/contacto');
+    console.log('5) Participar en conversaciones grupales');
+    console.log('6) Definir mensaje de presencia');
+    console.log('7) Enviar/recibir notificaciones');
+    console.log('8) Enviar/recibir archivos');
+    console.log('9) Cerrar sesion');
+    rl2.question('\nElige una opción: ', (answer) => {
+      handleSecondMenuOption(answer,rl2)
+    })
+  }
+
+  const handleSecondMenuOption = async(option,reader) => {
+    switch (option) {
+      case '1':
+        // Mostrar todos los contactos y su estado
+        break
+      case '2':
+        // Agregar un usuario a los contactos
+        break
+      case '3':
+        // Mostrar detalles de contacto de un usuario
+        break
+      case '4':
+        // Comunicación 1 a 1 con cualquier usuario/contacto
+        break
+      case '5':
+        // Participar en conversaciones grupales
+        break
+      case '6':
+        // Definir mensaje de presencia
+        break
+      case '7':
+        // Enviar/recibir notificaciones
+        break
+      case '8':
+        // Enviar/recibir archivos
+        break
+      case '9':
+        // Cerrar sesion
+        await xmpp.send(xml('presence', {type: 'unavailable'}))
+        xmpp.stop()
+        reader.close()
+        break
+      default:
+        console.log('Opción no válida. Por favor, elige una opción válida.')
+        secondMenu()
+    }
+  }
+
+
 
   xmpp.on('stanza', async (stanza) => {
     console.log('Received stanza:', stanza.toString());
@@ -114,7 +177,7 @@ async function login(jid, password) {
     }
     else if (stanza.is('presence') && stanza.attrs.from === xmpp.jid.toString()) {
       console.log('🗸', 'Successfully logged in')
-      //menu()
+      secondMenu()
       // Cambiar a segundo menu de comunicacion
     }
     // staza = stanza: <iq type="get" id="695-32514" to="car20593xx@alumchat.xyz/6thtpmnl4k" from="alumchat.xyz"><query xmlns="jabber:iq:version"/></iq>
@@ -132,12 +195,22 @@ async function login(jid, password) {
     await xmpp.send(xml('presence'))
   })
 
-  xmpp.on('error', (err) => {
+  xmpp.on('error',async (err) => {
     console.error('\n\n❌', err.toString())
+
+    if (err.condition === 'not-authorized') {
+      console.error('❌ Autenticación fallida. Verifica tu ID de cuenta y contraseña.');
+    } else {
+      console.error('❌', err.toString())
+    }
+    xmpp.stop()
   })
 
   xmpp.on('offline', () => {
     console.log('⏹', 'offline')
+
+    menu()
+
   })
 
   xmpp.start().catch(console.error)
@@ -192,7 +265,10 @@ async function deleteAccount(jid, password) {
   xmpp.on('offline', () => {
     xmpp.stop()
     console.log('⏹', 'offline')
+
     menu()
+
+
   })
 
   xmpp.start().catch(console.error)
