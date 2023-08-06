@@ -95,6 +95,16 @@ async function register(username, password) {
 }
 
 
+const addContact = async (xmpp, contactJid) => {
+  try {
+    const presenceStanza =  xml('presence', { to: `${contactJid}@alumchat.xyz`, type: 'subscribe' })
+    await xmpp.send(presenceStanza)
+    console.log('Solicitud de contacto enviada a', contactJid)
+  } catch (error) {
+    console.log('Error al agregar contacto', error)
+  }
+}
+
 async function login(jid, password) {
   const xmpp = client({
     service: 'xmpp://alumchat.xyz:5222',
@@ -106,14 +116,11 @@ async function login(jid, password) {
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-  debug(xmpp, true)
+  // debug(xmpp, true)
 
   
   const secondMenu = ()=> {
-    const rl2 = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
+
     console.log('\n');
     console.log('1) Mostrar todos los contactos y su estado');
     console.log('2) Agregar un usuario a los contactos');
@@ -124,18 +131,23 @@ async function login(jid, password) {
     console.log('7) Enviar/recibir notificaciones');
     console.log('8) Enviar/recibir archivos');
     console.log('9) Cerrar sesion');
-    rl2.question('\nElige una opción: ', (answer) => {
-      handleSecondMenuOption(answer,rl2)
+    rl.question('\nElige una opción: ',async (answer) => {
+      await handleSecondMenuOption(answer)
     })
   }
 
-  const handleSecondMenuOption = async(option,reader) => {
+  const handleSecondMenuOption = async(option) => {
     switch (option) {
       case '1':
         // Mostrar todos los contactos y su estado
         break
       case '2':
-        // Agregar un usuario a los contactos
+        rl.question('Introduce el ID del usuario que deseas agregar: ',async (contactJid) => {
+          addContact(xmpp, contactJid)
+          
+          
+        })
+        secondMenu()
         break
       case '3':
         // Mostrar detalles de contacto de un usuario
@@ -167,8 +179,6 @@ async function login(jid, password) {
     }
   }
 
-
-
   xmpp.on('stanza', async (stanza) => {
     console.log('Received stanza:', stanza.toString());
 
@@ -181,6 +191,18 @@ async function login(jid, password) {
       secondMenu()
       // Cambiar a segundo menu de comunicacion
     }
+    else if (stanza.is('presence')){
+      if (stanza.attrs.type === 'subscribe'){
+        console.log(`Solicitud de suscripcion de ${stanza.attrs.from}`)
+        xmpp.send(xml('presence', { to: stanza.attrs.from, type: 'subscribed' }));
+        console.log(`Has aceptado la solicitud de ${stanza.attrs.from}`);
+      }
+      else if (stanza.attrs.type === 'subscribed'){
+        console.log(`El usuario ${stanza.attrs.from} ha aceptado tu solicitud de suscripcion`);
+      }
+      
+    }
+
     // staza = stanza: <iq type="get" id="695-32514" to="car20593xx@alumchat.xyz/6thtpmnl4k" from="alumchat.xyz"><query xmlns="jabber:iq:version"/></iq>
     else if (stanza.is('iq') && stanza.attrs.type === 'get' && stanza.getChild('query', 'jabber:iq:version')) {
       const reply = xml('iq', {type: 'result', id: stanza.attrs.id, to: stanza.attrs.from}, xml('query', {xmlns: 'jabber:iq:version'}, xml('name', {}, 'NodeJS XMPP Client'), xml('version', {}, '1.0.0')))
@@ -214,7 +236,7 @@ async function login(jid, password) {
 
   })
 
-  xmpp.start().catch(console.error)
+  xmpp.start()
 }
 
 async function deleteAccount(jid, password) {
