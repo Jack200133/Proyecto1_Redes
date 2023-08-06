@@ -47,6 +47,7 @@ function handleMenuOption(option) {
       break
     case '4':
       console.log('Saliendo del programa...')
+      rl.close()
       process.exit(0)
 
     default:
