@@ -135,9 +135,8 @@ async function login(jid, password) {
     console.log('4) Comunicación 1 a 1 con cualquier usuario/contacto')
     console.log('5) Participar en conversaciones grupales')
     console.log('6) Definir mensaje de presencia')
-    console.log('7) Enviar/recibir notificaciones')
-    console.log('8) Enviar/recibir archivos')
-    console.log('9) Cerrar sesion')
+    console.log('7) Enviar/recibir archivos')
+    console.log('8) Cerrar sesion')
     rl.question('\nElige una opción: ',async (answer) => {
       await handleSecondMenuOption(answer)
     })
@@ -158,35 +157,47 @@ async function login(jid, password) {
           const configRequest = xml('iq', { to: groupJid, type: 'get' }, xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }))
           xmpp.send(configRequest)
           secondMenu()
-        });
-        break;
+        })
+        break
       case '2':
         // Enviar mensaje a grupo
         rl.question('Introduce el nombre del grupo: ', (groupName) => {
           rl.question('Introduce el mensaje que deseas enviar: ', (message) => {
-            const groupJid = `${groupName}@conference.alumchat.xyz`;
-            const messageStanza = xml('message', { to: groupJid, type: 'groupchat' }, xml('body', {}, message));
-            xmpp.send(messageStanza);
-            secondMenu();
-          });
-        });
-        break;
+            const groupJid = `${groupName}@conference.alumchat.xyz`
+            const messageStanza = xml('message', { to: groupJid, type: 'groupchat' }, xml('body', {}, message))
+            xmpp.send(messageStanza)
+            secondMenu()
+          })
+        })
+        break
       case '3':
         // Agregar usuario a grupo
         rl.question('Introduce el nombre del grupo: ', (groupName) => {
           rl.question('Introduce el JID del usuario que deseas agregar: ', (contactJid) => {
-            const groupJid = `${groupName}@conference.alumchat.xyz`;
+            const groupJid = `${groupName}@conference.alumchat.xyz`
             const inviteStanza = xml('message', { to: groupJid },
               xml('x', { xmlns: 'http://jabber.org/protocol/muc#user' },
                 xml('invite', { to: `${contactJid}@alumchat.xyz` })
               )
-            );
-            xmpp.send(inviteStanza);
-            console.log(`Invitación enviada a ${contactJid} para unirse al grupo ${groupName}`);
-            secondMenu();
-          });
-        });
-        break;
+            )
+            xmpp.send(inviteStanza)
+            console.log(`Invitación enviada a ${contactJid} para unirse al grupo ${groupName}`)
+            secondMenu()
+          })
+        })
+        break
+      case '4':
+        // Unirse a un grupo público
+        rl.question('Introduce el nombre del grupo público al que deseas unirte: ', (groupName) => {
+          const groupJid = `${groupName}@conference.alumchat.xyz/${xmpp.jid.local}`
+          const groupStanza = xml('presence', { to: groupJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' }))
+          xmpp.send(groupStanza)
+          console.log(`Intentando unirse al grupo público ${groupName}`)
+          secondMenu()
+        })
+        break
+        
+      
       default:
         console.log('Opción no válida. Por favor, elige una opción válida.');
         secondMenu();
@@ -238,20 +249,19 @@ async function login(jid, password) {
         console.log('1) Crear grupo')
         console.log('2) Enviar mensaje a grupo')
         console.log('3) Agregar usuario a grupo')
+        console.log('4) Unirse a un grupo público') // Nueva opción aquí
         rl.question('\nElige una opción: ', (answer) => {
           handleGroup(answer)
         })
         break
+        
       case '6':
         // Definir mensaje de presencia
         break
       case '7':
-        // Enviar/recibir notificaciones
-        break
-      case '8':
         // Enviar/recibir archivos
         break
-      case '9':
+      case '8':
         // Cerrar sesion
         await xmpp.send(xml('presence', {type: 'unavailable'}))
         await xmpp.stop()
@@ -263,7 +273,7 @@ async function login(jid, password) {
   }
 
   xmpp.on('stanza', async (stanza) => {
-    console.log('Received stanza:', stanza.toString())
+    // console.log('Received stanza:', stanza.toString())
 
     if (stanza.is('message')) {
       // Agregar el mensaje a la cola en lugar de procesarlo inmediatamente
@@ -341,12 +351,17 @@ async function login(jid, password) {
       const roomJid = stanza.attrs.from;
       console.log(`Recibido formulario de configuración para ${roomJid}.`);
       
-      // Aquí puedes modificar el formulario según tus necesidades. 
-      // Por ahora, vamos a aceptar los valores predeterminados y enviar el formulario de vuelta.
-      const submitForm = xml('iq', { to: roomJid, type: 'set' }, xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }, xml('x', { xmlns: 'jabber:x:data', type: 'submit' })));
+      // Obtener el formulario de configuración
+      const form = stanza.getChild('query').getChild('x', 'jabber:x:data');
+      // Establecer el campo 'muc#roomconfig_publicroom' a verdadero
+      const publicRoomField = xml('field', { var: 'muc#roomconfig_publicroom' }, xml('value', {}, '1')); // '1' significa verdadero
+      form.append(publicRoomField);
+    
+      // Crear y enviar el formulario modificado
+      const submitForm = xml('iq', { to: roomJid, type: 'set' }, xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }, form));
       xmpp.send(submitForm);
-  
-      console.log(`Grupo ${roomJid} creado y configurado.`);
+    
+      console.log(`Grupo ${roomJid} creado y configurado como sala pública.`);
     }
 
   })
