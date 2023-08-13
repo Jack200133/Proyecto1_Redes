@@ -7,6 +7,15 @@ const contacts = {}
 const groupRoster = {}
 const registerState = {successfulRegistration: false } 
 
+const showIcon = {
+  'away': '🟠Away',
+  'xa': '🟡Extended away',
+  'dnd': '⛔Do not disturb',
+  'chat': '🟢Available',
+  'unavailable': '⚪Offline',
+  
+}
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -21,6 +30,23 @@ function menu() {
     handleMenuOption(answer)
   })
 }
+
+const cambiarEstadoUsuario = (xmpp, show, status) => {
+  try {
+    const presenceStanza = xml(
+      'presence',
+      {},
+      xml('show', {}, show), // estado como 'chat', 'away', 'dnd', etc.
+      xml('status', {}, status) // mensaje opcional, por ejemplo, "En una reunión"
+    );
+
+    xmpp.send(presenceStanza);
+    console.log(`Estado cambiado a ${show} con status ${status}`);
+  } catch (error) {
+    console.error(`Error al cambiar el estado y show del usuario: ${error.message}`);
+  }
+};
+
 
 const getRoster = (xmpp,jid) => {
   const rosterQuery = xml('iq', { type: 'get', to:`${jid}@alumchat.xyz`}, xml('query', { xmlns: 'jabber:iq:roster' }));
@@ -327,7 +353,16 @@ async function login(jid, password) {
         break
         
       case '6':
-        // Definir mensaje de presencia
+        for (const show in showIcon) {
+          console.log(`${show}: ${showIcon[show]}`)
+        }
+        rl.question('Introduce el show que deseas usar: ', (show) => {
+          // Deseas usar un mensaje de estado?
+          rl.question('Introduce el mensaje de estado que deseas usar (opcional): ', (status) => {
+            cambiarEstadoUsuario(xmpp, show, status)
+            secondMenu()
+          })
+        })
         break
       case '7':
         // Enviar/recibir archivos
@@ -411,14 +446,6 @@ async function login(jid, password) {
             contacts[contactJid] = {...contacts[contactJid],status: ''}
           }
           if (show) {
-            const showIcon = {
-              'away': '🟠Away',
-              'xa': '🟡Extended away',
-              'dnd': '⛔Do not disturb',
-              'chat': '🟢Available',
-              'unavailable': '⚪Offline',
-              
-            }
             contacts[contactJid] = {...contacts[contactJid],show: showIcon[show]}
           }else{
             contacts[contactJid] = {...contacts[contactJid],show: '🟢Available'}
