@@ -3,9 +3,8 @@ const parse = require("@xmpp/xml/lib/parse")
 const net = require('net')
 const debug = require("@xmpp/debug")
 const readline = require('readline')
-const messageQueue = []
-const groupchat = []
 const contacts = {}
+const groupRoster = {}
 const registerState = {successfulRegistration: false } 
 
 const rl = readline.createInterface({
@@ -23,6 +22,59 @@ function menu() {
   })
 }
 
+const getRoster = (xmpp,jid) => {
+  const rosterQuery = xml('iq', { type: 'get', to:`${jid}@alumchat.xyz`}, xml('query', { xmlns: 'jabber:iq:roster' }));
+  xmpp.send(rosterQuery);
+}
+
+const cleanContacts = () => {
+  for (const contact in contacts) {
+    delete contacts[contact]
+  }
+}
+
+
+const formatContacts = async (xmpp) => {
+  if (contacts.length === 0) {
+    console.log('No tienes contactos')
+  }else{
+    
+    console.log('Contactos:') 
+    console.log('\tJID    \t Show    \t Estado')
+    for (const contact in contacts) {
+      const isGroup = contact.includes('@conference.alumchat.xyz')
+      const contactJid = contact.split('@')[0]
+
+      if (isGroup) {
+        // Obtener el rouster del group y mostrarlo
+        
+        const grupRost = groupRoster[contact]
+        console.log(`=> ${contactJid}: ${Object.keys(grupRost).length} miembros`)
+        if (grupRost) {
+          for (const contact in grupRost) {
+            const contactJid = contact.split('@')[0]
+            console.log(`\t--> ${contactJid}: ${grupRost[contact].show } \t(${grupRost[contact].status? grupRost[contact].status : 'sin estado'})`);
+          }
+        }
+        continue
+      }
+
+      //print sin tanbulacion
+      if (contactJid.length > 10) {
+        console.log(`=> ${contactJid}: ${contacts[contact].show } \t(${contacts[contact].status? contacts[contact].status : 'sin estado'})`);
+      }else if(contactJid.length < 7){
+        console.log(`=> ${contactJid}:\t\t ${contacts[contact].show } \t(${contacts[contact].status? contacts[contact].status : 'sin estado'})`);
+  
+      }
+      
+      else{
+        console.log(`=> ${contactJid}:\t ${contacts[contact].show } \t(${contacts[contact].status? contacts[contact].status : 'sin estado'})`);
+  
+      }
+      //console.log(`- ${contact}: ${contact.show || 'disponible'} (${contact.status || 'sin estado'})`);
+    }
+  }
+}
 
 function handleMenuOption(option) {
   switch (option) {
@@ -100,7 +152,40 @@ async function register(username, password) {
   })
 }
 
+const crearRoom = async (xmpp, roomName) => {
+  try {
+    const groupJid = `${roomName}@conference.alumchat.xyz/${xmpp.jid.local}`
+    const groupStanza = xml('presence', { to: groupJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' }))
+    xmpp.send(groupStanza)
 
+    const configRequest = xml('iq', { to: groupJid, type: 'set' }, 
+      xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }, 
+        xml('x', { xmlns: 'jabber:x:data', type: 'submit' }, 
+          xml('field', { var: 'muc#roomconfig_publicroom', type: 'boolean' }, 
+            xml('value', {}, '1')
+          )
+        )
+      )
+    )
+
+    xmpp.send(configRequest)
+    console.log("Sala de chat creada exitosamente y configurada como abierta")
+  } catch (error) {
+    console.log(`Error al crear la sala de chat: ${error.message}`)
+  }
+}
+
+
+const unirseRoom = async (xmpp, roomName) => {
+  try {
+    const groupJid = `${roomName}@conference.alumchat.xyz/${xmpp.jid.local}`
+    const groupStanza = xml('presence', { to: groupJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' }))
+    xmpp.send(groupStanza)
+    console.log(`Intentando unirse al grupo público ${roomName}`)
+  } catch (error) {
+    console.log(`Error al unirse a la sala de chat: ${error.message}`)
+  }
+}
 
 const addContact = async (xmpp, contactJid) => {
   try {
@@ -123,7 +208,7 @@ async function login(jid, password) {
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-  debug(xmpp, true)
+  //debug(xmpp, true)
 
   
   const secondMenu = ()=> {
@@ -140,8 +225,6 @@ async function login(jid, password) {
     rl.question('\nElige una opción: ',async (answer) => {
       await handleSecondMenuOption(answer)
     })
-
-
   }
 
   const handleGroup = (option) => { 
@@ -149,13 +232,7 @@ async function login(jid, password) {
       case '1':
         // Crear grupo
         rl.question('Introduce el nombre del grupo: ', (groupName) => {
-          const groupJid = `${groupName}@conference.alumchat.xyz/${xmpp.jid.local}`
-          const groupStanza = xml('presence', { to: groupJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' }))
-          xmpp.send(groupStanza)
-          console.log(`Intentando crear o unirse al grupo ${groupName}`)
-
-          const configRequest = xml('iq', { to: groupJid, type: 'get' }, xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }))
-          xmpp.send(configRequest)
+          crearRoom(xmpp,groupName)
           secondMenu()
         })
         break
@@ -189,10 +266,7 @@ async function login(jid, password) {
       case '4':
         // Unirse a un grupo público
         rl.question('Introduce el nombre del grupo público al que deseas unirte: ', (groupName) => {
-          const groupJid = `${groupName}@conference.alumchat.xyz/${xmpp.jid.local}`
-          const groupStanza = xml('presence', { to: groupJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' }))
-          xmpp.send(groupStanza)
-          console.log(`Intentando unirse al grupo público ${groupName}`)
+          unirseRoom(xmpp,groupName)
           secondMenu()
         })
         break
@@ -208,11 +282,8 @@ async function login(jid, password) {
   const handleSecondMenuOption = async(option) => {
     switch (option) {
       case '1':
-        console.log('Contactos:')
-        for (const contact in contacts) {
-          
-          console.log(`- ${contact}: ${contact.show || 'disponible'} (${contact.status || 'sin estado'})`);
-        }
+        //console.log(contacts)
+        formatContacts(xmpp)
         secondMenu()
         break
       case '2':
@@ -265,6 +336,7 @@ async function login(jid, password) {
         // Cerrar sesion
         await xmpp.send(xml('presence', {type: 'unavailable'}))
         await xmpp.stop()
+        cleanContacts
         break
       default:
         console.log('Opción no válida. Por favor, elige una opción válida.')
@@ -276,8 +348,6 @@ async function login(jid, password) {
     // console.log('Received stanza:', stanza.toString())
 
     if (stanza.is('message')) {
-      // Agregar el mensaje a la cola en lugar de procesarlo inmediatamente
-      messageQueue.push(stanza)
       
       // Manejar invitaciones a salas de grupo
       if (stanza.is('message') && stanza.getChild('x', 'http://jabber.org/protocol/muc#user') 
@@ -285,6 +355,7 @@ async function login(jid, password) {
       {
         const roomJid = stanza.attrs.from
         console.log(`Has sido invitado a la sala ${roomJid}`)
+      
         const presenceStanza = xml(
           'presence',
           { to: roomJid + '/' + xmpp.jid.local },
@@ -312,6 +383,7 @@ async function login(jid, password) {
     }
     }
     else if (stanza.is('presence') && stanza.attrs.from === xmpp.jid.toString() && stanza.attrs.type !== 'unavailable') {
+      getRoster(xmpp,jid)
       console.log('🗸', 'Successfully logged in')
       secondMenu()
       // Cambiar a segundo menu de comunicacion
@@ -321,48 +393,103 @@ async function login(jid, password) {
         console.log(`Solicitud de suscripcion de ${stanza.attrs.from}`)
         xmpp.send(xml('presence', { to: stanza.attrs.from, type: 'subscribed' }))
         console.log(`Has aceptado la solicitud de ${stanza.attrs.from}`)
+        contacts[stanza.attrs.from] = {status: '', show: '🟢Available'}
       }
       else if (stanza.attrs.type === 'subscribed'){
         console.log(`El usuario ${stanza.attrs.from} ha aceptado tu solicitud de suscripcion`)
       }
       else if(!stanza.attrs.type){
-        console.log(`El usuario ${stanza.attrs.from} esta disponible`)
         const contactJid = stanza.attrs.from.split('/')[0]
         if (contactJid !== xmpp.jid.bare().toString()) {  // Comprueba si el JID del contacto es diferente al tuyo
+          console.log(`El usuario ${contactJid} esta en tu lista de contactos`)
           const status = stanza.getChild('status')?.getText()
           const show = stanza.getChild('show')?.getText()
-          contacts[contactJid] = {status, show}
+          // console.log(`${contactJid}-${status}-${show}`)
+          if (status) {
+            contacts[contactJid] = {...contacts[contactJid],status}
+          }else{
+            contacts[contactJid] = {...contacts[contactJid],status: ''}
+          }
+          if (show) {
+            const showIcon = {
+              'away': '🟠Away',
+              'xa': '🟡Extended away',
+              'dnd': '⛔Do not disturb',
+              'chat': '🟢Available',
+              'unavailable': '⚪Offline',
+              
+            }
+            contacts[contactJid] = {...contacts[contactJid],show: showIcon[show]}
+          }else{
+            contacts[contactJid] = {...contacts[contactJid],show: '🟢Available'}
+          }
+          //contacts[contactJid] = {status, show}
         }
       }
-      
+      // Si es una presencia de un grupo agregar al roster del grupo
+      if (stanza.getChild('x', 'http://jabber.org/protocol/muc#user')) {
+        const local = {}
+        ///<presence to="car20593xx@alumchat.xyz/6s52vog16d" from="hekol@conference.alumchat.xyz/car20593xx"><x xmlns="http://jabber.org/protocol/muc#user"><item jid="car20593xx@alumchat.xyz/6s52vog16d" affiliation="owner" role="moderator"/><status code="110"/><status code="100"/><status code="170"/></x></presence>
+        const groupJid = stanza.attrs.from.split('/')[0]
+        const groupRosterItems = stanza.getChild('x').getChildren('item')
+        
+        groupRosterItems.forEach((item) => {
+          const contactJid = item.attrs.jid.split('/')[0]
+          const status = ""
+          const show = "🟢Available"
+          console.log(`${contactJid} se ha unido al grupo ${groupJid}`)
+          if (contactJid !== xmpp.jid.bare().toString() && !(contactJid in contacts)) { 
+            contacts[contactJid] = {status, show}
+          }
+          if (!(contactJid in local)){
+
+            local[contactJid] = {status, show}
+          }
+        })
+
+        if (!(groupJid in groupRoster)){
+          groupRoster[groupJid] = local
+        }else{
+          groupRoster[groupJid] = {...groupRoster[groupJid],...local}
+        }
+        
+      }
     }
 
-    // staza = stanza: <iq type="get" id="695-32514" to="car20593xx@alumchat.xyz/6thtpmnl4k" from="alumchat.xyz"><query xmlns="jabber:iq:version"/></iq>
-    else if (stanza.is('iq') && stanza.attrs.type === 'get' && stanza.getChild('query', 'jabber:iq:version')) {
-      const reply = xml('iq', {type: 'result', id: stanza.attrs.id, to: stanza.attrs.from}, xml('query', {xmlns: 'jabber:iq:version'}, xml('name', {}, 'NodeJS XMPP Client'), xml('version', {}, '1.0.0')))
-    
-      xmpp.send(reply)
-      
-
+    // Para guardar el rouster
+    else if (stanza.is('iq') && stanza.attrs.type === 'result' && stanza.getChild('query', 'jabber:iq:roster')) {
+      const rosterItems = stanza.getChild('query').getChildren('item')
+      rosterItems.forEach((item) => {
+        const contactJid = item.attrs.jid
+        const status = ""
+        const show = "⚪Offline"
+        if (contactJid !== xmpp.jid.bare().toString() && !(contactJid in contacts)) { 
+          contacts[contactJid] = {status, show}
+        }
+        // contacts[contactJid] = { name: item.attrs.name || '' } // Puedes añadir otros atributos aquí
+        // console.log(`- ${contactJid}: ${status}`)
+      })
     }
+
+
      // Cuando recibimos el formulario de configuración después de intentar crear una sala
 
-    else if (stanza.is('iq') && stanza.attrs.type === 'result' && stanza.getChild('query', 'http://jabber.org/protocol/muc#owner')) {
-      const roomJid = stanza.attrs.from;
-      console.log(`Recibido formulario de configuración para ${roomJid}.`);
+    // else if (stanza.is('iq') && stanza.attrs.type === 'result' && stanza.getChild('query', 'http://jabber.org/protocol/muc#owner')) {
+    //   const roomJid = stanza.attrs.from;
+    //   console.log(`Recibido formulario de configuración para ${roomJid}.`);
       
-      // Obtener el formulario de configuración
-      const form = stanza.getChild('query').getChild('x', 'jabber:x:data');
-      // Establecer el campo 'muc#roomconfig_publicroom' a verdadero
-      const publicRoomField = xml('field', { var: 'muc#roomconfig_publicroom' }, xml('value', {}, '1')); // '1' significa verdadero
-      form.append(publicRoomField);
+    //   // Obtener el formulario de configuración
+    //   const form = stanza.getChild('query').getChild('x', 'jabber:x:data');
+    //   // Establecer el campo 'muc#roomconfig_publicroom' a verdadero
+    //   const publicRoomField = xml('field', { var: 'muc#roomconfig_publicroom' }, xml('value', {}, '1')); // '1' significa verdadero
+    //   form.append(publicRoomField);
     
-      // Crear y enviar el formulario modificado
-      const submitForm = xml('iq', { to: roomJid, type: 'set' }, xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }, form));
-      xmpp.send(submitForm);
+    //   // Crear y enviar el formulario modificado
+    //   const submitForm = xml('iq', { to: roomJid, type: 'set' }, xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }, form));
+    //   xmpp.send(submitForm);
     
-      console.log(`Grupo ${roomJid} creado y configurado como sala pública.`);
-    }
+    //   console.log(`Grupo ${roomJid} creado y configurado como sala pública.`);
+    // }
 
   })
 
