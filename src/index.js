@@ -9,6 +9,7 @@ const groupRoster = {}
 const registerState = {successfulRegistration: false } 
 let base64Data = ''
 
+// Iconos para los shows de los Usuarios
 const showIcon = {
   'away': '🟠Away',
   'xa': '🟡Extended away',
@@ -18,11 +19,13 @@ const showIcon = {
   
 }
 
+// Interfaz para leer la entrada del usuario
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 })
 
+// Menu principal para el usuario
 function menu() {
   console.log('1) Registrar una nueva cuenta en el servidor')
   console.log('2) Iniciar sesión con una cuenta')
@@ -33,6 +36,7 @@ function menu() {
   })
 }
 
+// Funcion para cambiar el estado y show del usuario
 const cambiarEstadoUsuario = (xmpp, show, status) => {
   try {
     const presenceStanza = xml(
@@ -49,19 +53,20 @@ const cambiarEstadoUsuario = (xmpp, show, status) => {
   }
 }
 
-
+// Funcion para obtener el roster del usuario
 const getRoster = (xmpp,jid) => {
   const rosterQuery = xml('iq', { type: 'get', to:`${jid}@alumchat.xyz`}, xml('query', { xmlns: 'jabber:iq:roster' }))
   xmpp.send(rosterQuery)
 }
 
+// Funcion para limpiar el roster al cerrar sesion
 const cleanContacts = () => {
   for (const contact in contacts) {
     delete contacts[contact]
   }
 }
 
-
+// Funcion para dar formato a los contactos al mostrarlos en el CLI
 const formatContacts = async () => {
   if (contacts.length === 0) {
     console.log('No tienes contactos')
@@ -99,14 +104,13 @@ const formatContacts = async () => {
         console.log(`=> ${contactJid}:\t ${contacts[contact].show } \t(${contacts[contact].status? contacts[contact].status : 'sin estado'})`)
   
       }
-      //console.log(`- ${contact}: ${contact.show || 'disponible'} (${contact.status || 'sin estado'})`)
     }
   }
 }
 
 
 
-
+// Funcion para leer el archivo y enviarlo
 const leerArchivo = async (xmpp,path,toJid) => {
   try{
   
@@ -125,6 +129,7 @@ const leerArchivo = async (xmpp,path,toJid) => {
   }
 }
 
+// Funcion para manejar las opciones del menu principal de acciones
 function handleMenuOption(option) {
   switch (option) {
     case '1':
@@ -163,14 +168,17 @@ function handleMenuOption(option) {
   }
 }
 
-
+// Funcion para registrar una nueva cuenta
 async function register(username, password) {
+  
+  // Se usa un socket de net para registrar la cuenta
   const client = new net.Socket()
   client.connect(5222, 'alumchat.xyz', function() {
     console.log('Connected')
     client.write('<stream:stream to="' + 'alumchat.xyz' + '" xmlns="jabber:client" xmlns:stream="http://etherx.jabber.org/streams" version="1.0">')
   })
 
+  // Se verifica el usuario y se envia el registro
   client.on('data', function(data) {
     console.log('Received: ' + data)
     if (data.toString().includes('<stream:features>')) {
@@ -187,6 +195,7 @@ async function register(username, password) {
     }
   })
 
+  // Se cierra la conexion e inicia sesion si el registro fue exitoso
   client.on('close', function() {
     console.log('Connection closed')
     if (registerState.successfulRegistration) {
@@ -194,17 +203,21 @@ async function register(username, password) {
       login(username, password)
     }
     else {
+      // Si el registro no fue existoso, mostramos el menu de usuario
       menu()
     }
   })
 }
 
+// Funcion para crear una sala de chat
 const crearRoom = async (xmpp, roomName) => {
   try {
+    // Crear sala de chat
     const groupJid = `${roomName}@conference.alumchat.xyz/${xmpp.jid.local}`
     const groupStanza = xml('presence', { to: groupJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' }))
     xmpp.send(groupStanza)
 
+    // Configurar sala de chat como abierta
     const configRequest = xml('iq', { to: groupJid, type: 'set' }, 
       xml('query', { xmlns: 'http://jabber.org/protocol/muc#owner' }, 
         xml('x', { xmlns: 'jabber:x:data', type: 'submit' }, 
@@ -222,7 +235,7 @@ const crearRoom = async (xmpp, roomName) => {
   }
 }
 
-
+// Funcion para unirse a una sala de chat
 const unirseRoom = async (xmpp, roomName) => {
   try {
     const groupJid = `${roomName}@conference.alumchat.xyz/${xmpp.jid.local}`
@@ -234,6 +247,7 @@ const unirseRoom = async (xmpp, roomName) => {
   }
 }
 
+// Funcion para agregar un contacto con una stanza de presence
 const addContact = async (xmpp, contactJid) => {
   try {
     const presenceStanza =  xml('presence', { to: `${contactJid}@alumchat.xyz`, type: 'subscribe' })
@@ -244,6 +258,7 @@ const addContact = async (xmpp, contactJid) => {
   }
 }
 
+// Funcion para enviar mensajes
 const sendMessages = async (xmpp, contactJid, message) => {
   try {
     const messageStanza = xml(
@@ -252,13 +267,13 @@ const sendMessages = async (xmpp, contactJid, message) => {
       xml('body', {}, message),
     )
     xmpp.send(messageStanza)
-    // console.log('Mensaje enviado a', contactJid)
   } catch (error) {
     console.log('❌ Error al enviar mensaje', error)
   }
 }
 
 async function login(jid, password) {
+  // Nos conectamos al servidor
   const xmpp = client({
     service: 'xmpp://alumchat.xyz:5222',
     domain: 'alumchat.xyz',
@@ -271,7 +286,7 @@ async function login(jid, password) {
 
   // debug(xmpp, true)
 
-  
+  // Funcion para mostrar el segundo menu de funciones
   const secondMenu = ()=> {
 
     console.log('\n')
@@ -280,14 +295,14 @@ async function login(jid, password) {
     console.log('3) Mostrar detalles de contacto de un usuario')
     console.log('4) Comunicación 1 a 1 con cualquier usuario/contacto')
     console.log('5) Participar en conversaciones grupales')
-    console.log('6) Definir mensaje de presencia')
+    console.log('6) Cambiar estado y show')
     console.log('7) Enviar/recibir archivos')
     console.log('8) Cerrar sesion')
     rl.question('\nElige una opción: ',async (answer) => {
       await handleSecondMenuOption(answer)
     })
   }
-
+  // Funcion para mostrar el menu de funciones de grupo
   const handleGroup = (option) => { 
     switch (option) {
       case '1':
@@ -339,21 +354,23 @@ async function login(jid, password) {
     }
   }
   
-
+  // Funcion para manejar las opciones del menu de funciones
   const handleSecondMenuOption = async(option) => {
     switch (option) {
       case '1':
-        //console.log(contacts)
+        //Mostar todos los contactos y su estado
         formatContacts()
         secondMenu()
         break
       case '2':
+        // Agregar un usuario a los contactos
         rl.question('Introduce el ID del usuario que deseas agregar: ',async (contactJid) => {
           addContact(xmpp, contactJid)
           secondMenu()
         })
         break
       case '3':
+        // Mostrar detalles de contacto de un usuario
         rl.question('Introduce el JID del usuario del que deseas ver detalles: ', (contactJid) => {
           const contact = contacts[contactJid + '@alumchat.xyz']
           if (contact) {
@@ -365,6 +382,7 @@ async function login(jid, password) {
         })
         break
       case '4':
+        // Comunicación 1 a 1 con cualquier usuario/contacto
         rl.question('Introduce el JID del usuario con el que deseas chatear: ', (contactJid) => {
           rl.question('Introduce el mensaje que deseas enviar: ', (message) => {
             sendMessages(xmpp, contactJid, message)
@@ -373,6 +391,7 @@ async function login(jid, password) {
         })
         break
       case '5':
+        // Participar en conversaciones grupales
         console.log('1) Crear grupo')
         console.log('2) Enviar mensaje a grupo')
         console.log('3) Agregar usuario a grupo')
@@ -383,11 +402,11 @@ async function login(jid, password) {
         break
         
       case '6':
+        // Cambiar estado y show
         for (const show in showIcon) {
           console.log(`${show}: ${showIcon[show]}`)
         }
         rl.question('Introduce el show que deseas usar: ', (show) => {
-          // Deseas usar un mensaje de estado?
           rl.question('Introduce el mensaje de estado que deseas usar (opcional): ', (status) => {
             cambiarEstadoUsuario(xmpp, show, status)
             secondMenu()
@@ -396,9 +415,7 @@ async function login(jid, password) {
         break
       case '7':
         // Enviar/recibir archivos
-
         rl.question('Introduce el JID del usuario al que deseas enviar un archivo: ', (contactJid) => {
-          
           rl.question('Introduce la ruta del archivo que deseas enviar: ', async (filePath) => {
             await leerArchivo(xmpp,filePath,contactJid)
             secondMenu()
@@ -418,8 +435,6 @@ async function login(jid, password) {
   }
 
   xmpp.on('stanza', async (stanza) => {
-    // console.log('Received stanza:', stanza.toString())
-
     if (stanza.is('message')) {
       
       // Manejar invitaciones a salas de grupo
@@ -442,6 +457,7 @@ async function login(jid, password) {
         const from = stanza.attrs.from
         const message = stanza.getChildText('body')
 
+        // Verificar si es un archivo
         const isFile = message.includes('file://') 
         if (isFile) {
           const fileData = message.split('//')[2]
@@ -475,19 +491,23 @@ async function login(jid, password) {
         }
     }
     }
+    // Manejo del loggin
     else if (stanza.is('presence') && stanza.attrs.from === xmpp.jid.toString() && stanza.attrs.type !== 'unavailable') {
+      // Obtener el roster del usuario
       getRoster(xmpp,jid)
       console.log('🗸', 'Successfully logged in')
       secondMenu()
-      // Cambiar a segundo menu de comunicacion
     }
+    // Manejo de la suscripcion
     else if (stanza.is('presence')){
+      // Si es una presencia de un usuario agregar al roster
       if (stanza.attrs.type === 'subscribe'){
         console.log(`🤗 Solicitud de suscripcion de ${stanza.attrs.from}`)
         xmpp.send(xml('presence', { to: stanza.attrs.from, type: 'subscribed' }))
         console.log(`🤗 Has aceptado la solicitud de ${stanza.attrs.from}`)
         contacts[stanza.attrs.from] = {status: '', show: '🟢Available'}
       }
+      // Si es una presencia de un usuario aceptando la suscripcion
       else if (stanza.attrs.type === 'subscribed'){
         console.log(`🤗 El usuario ${stanza.attrs.from} ha aceptado tu solicitud de suscripcion`)
       }
@@ -497,7 +517,6 @@ async function login(jid, password) {
           console.log(`El usuario ${contactJid} esta en tu lista de contactos`)
           const status = stanza.getChild('status')?.getText()
           const show = stanza.getChild('show')?.getText()
-          // console.log(`${contactJid}-${status}-${show}`)
           if (status) {
             contacts[contactJid] = {...contacts[contactJid],status}
           }else{
@@ -514,7 +533,6 @@ async function login(jid, password) {
       // Si es una presencia de un grupo agregar al roster del grupo
       if (stanza.getChild('x', 'http://jabber.org/protocol/muc#user')) {
         const local = {}
-        ///<presence to="car20593xx@alumchat.xyz/6s52vog16d" from="hekol@conference.alumchat.xyz/car20593xx"><x xmlns="http://jabber.org/protocol/muc#user"><item jid="car20593xx@alumchat.xyz/6s52vog16d" affiliation="owner" role="moderator"/><status code="110"/><status code="100"/><status code="170"/></x></presence>
         const groupJid = stanza.attrs.from.split('/')[0]
         const groupRosterItems = stanza.getChild('x').getChildren('item')
         
@@ -551,8 +569,6 @@ async function login(jid, password) {
         if (contactJid !== xmpp.jid.bare().toString() && !(contactJid in contacts)) { 
           contacts[contactJid] = {status, show}
         }
-        // contacts[contactJid] = { name: item.attrs.name || '' } // Puedes añadir otros atributos aquí
-        // console.log(`- ${contactJid}: ${status}`)
       })
     }
   
@@ -561,38 +577,38 @@ async function login(jid, password) {
 
   })
 
-
+  // Manejo de eventos
   xmpp.on('online', async (address) => {
     console.log('▶', 'online as', address.toString())
     await xmpp.send(xml('presence'))
-    // resolve(xmpp)
   })
 
+  // Si el servidor nos envia un error
   xmpp.on('error',async (err) => {
-    // console.error('\n\n❌', err.toString())
 
     if (err.condition === 'not-authorized') {
       console.error('❌ Autenticación fallida. Verifica tu ID de cuenta y contraseña.')
     } else {
       console.error('❌', err.toString())
     }
-    // xmpp.stop()
-    // reject(err)
     menu()
   })
 
+  // Si nos desconectamos
   xmpp.on('offline', () => {
     console.log('⏹', 'offline')
-
-    //resolve(xmpp)  
     menu()
   })
 
+  // Nos conectamos al servidor
   xmpp.start().catch(() =>{})
 
 }
 
+// Funcion para eliminar una cuenta del servidor
 async function deleteAccount(jid, password) {
+
+  // Nos conectamos al servidor 
   const xmpp = client({
     service: 'xmpp://alumchat.xyz:5222',
     domain: 'alumchat.xyz',
@@ -603,11 +619,9 @@ async function deleteAccount(jid, password) {
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-  debug(xmpp, true)
-
+  
   xmpp.on('stanza', async (stanza) => {
-    console.log('Received stanza:', stanza.toString())
-
+    // si nos llega la estanza del result es que se ha eliminado la cuenta
     if (stanza.is('iq') && stanza.attrs.type === 'result') {
       console.log('🗸', 'Successfully deleted account')
       
@@ -620,7 +634,7 @@ async function deleteAccount(jid, password) {
 
   xmpp.on('online', async () => {
     console.log('▶', 'online as', xmpp.jid.toString(), '\n')
-
+    // creamos la estanza para eliminar la cuenta
     const deleteStanza = xml(
       'iq',
       { type: 'set', id: 'delete1' },
@@ -637,7 +651,7 @@ async function deleteAccount(jid, password) {
       await xmpp.stop()
     }
   })
-
+  // Nos desconectamos y volvemos al menu 
   xmpp.on('offline', () => {
     xmpp.stop()
     console.log('⏹', 'offline')
@@ -647,7 +661,7 @@ async function deleteAccount(jid, password) {
 
   })
 
-  xmpp.start().catch(console.error)
+  xmpp.start().catch(() => {})
 }
 
 
