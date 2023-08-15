@@ -62,7 +62,7 @@ const cleanContacts = () => {
 }
 
 
-const formatContacts = async (xmpp) => {
+const formatContacts = async () => {
   if (contacts.length === 0) {
     console.log('No tienes contactos')
   }else{
@@ -104,139 +104,26 @@ const formatContacts = async (xmpp) => {
   }
 }
 
-const waitForResponse = (xmpp, id) => {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error(`Tiempo de espera excedido para la respuesta con ID: ${id}`))
-    }, 10000) // Tiempo de espera de 10 segundos
-
-    const listener = (stanza) => {
-      if (stanza.is('iq') && stanza.attrs.id === id) {
-        clearTimeout(timeout)
-        xmpp.removeListener('stanza', listener)// Asegúrate de remover el listener para evitar fugas de memoria
-        if (stanza.attrs.type === 'result') {
-          resolve(stanza)
-        } else if (stanza.attrs.type === 'error') {
-          reject(new Error(`Error en la respuesta con ID: ${id}`))
-        }
-      }
-    }
-
-    xmpp.on('stanza', listener)
-  })
-}
-
-const enviarArchivo = async (xmpp, toJid, fileData) => {
-  try {
-    const sid = 'dv917fb4'// Identificador único para este bytestream
-    const blockSize = 4096// Tamaño del bloque
-
-    // Iniciar el in-band bytestream
-    const openStanza = xml('iq', { from: xmpp.jid, to: toJid, type: 'set', id: 'iy2s986q' },
-      xml('open', { sid, 'block-size': blockSize, xmlns: 'http://jabber.org/protocol/ibb' })
-    )
-
-    xmpp.send(openStanza)
-
-    // Esperar por la aceptación (esto podría necesitar una implementación adicional dependiendo de tu biblioteca)
-    await waitForResponse(xmpp, 'iy2s986q')
-
-    // Enviar los datos en bloques de 4096 bytes
-    const base64Data = Buffer.from(fileData).toString('base64')
-    for (let i = 0; i < base64Data.length; i += blockSize) {
-      const seq = i / blockSize
-      const dataBlock = base64Data.substring(i, i + blockSize)
-
-      const dataStanza = xml('message', { from: xmpp.jid, to: toJid, id: 'data' + seq },
-        xml('data', { xmlns: 'http://jabber.org/protocol/ibb', sid, seq },
-          dataBlock
-        )
-      )
-
-      xmpp.send(dataStanza)
-    }
-
-    // Cerrar el in-band bytestream
-    const closeStanza = xml('iq', { from: xmpp.jid, to: toJid, type: 'set', id: 'fr61g835' },
-      xml('close', { xmlns: 'http://jabber.org/protocol/ibb', sid })
-    )
-
-    xmpp.send(closeStanza)
-    await waitForResponse(xmpp, 'fr61g835')
-
-  } catch (error) {
-    console.error(`Error al enviar el archivo: ${error.message}`)
-  }
-}
 
 
 
 const leerArchivo = async (xmpp,path,toJid) => {
-  fs.readFile( path, async (err, data) => {
+  try{
   
-    if (err) {
-      console.error(`Error al leer el archivo: ${err.message}`)
-      return
-    }
+    const extension = path.split('.').pop()
     
-    enviarArchivo(xmpp, toJid, data).then(() => {
-      console.log('Archivo enviado exitosamente')
-    }).catch((err) => {
-      console.error(`Error al enviar el archivo: ${err.message}`)
-    })
-
-  })
-}
-
-const waitForClosure = (xmpp, expectedSid) => {
-  return new Promise((resolve, reject) => {
-    xmpp.on('iq', (iq) => {
-      if (iq.attrs.type === 'set' && iq.getChild('close', 'http://jabber.org/protocol/ibb')?.attrs.sid === expectedSid) {
-        const response = xml('iq', { from: xmpp.jid, to: iq.attrs.from, type: 'result', id: iq.attrs.id })
-        xmpp.send(response)
-        resolve()
-      }
-    })
-  })
-}
-
-
-const recibirArchivo = async (xmpp, fromJid, expectedSid = 'dv917fb4') => {
-  try {
-    // Aceptar la petición de bytestream
-    const response = xml('iq', { from: xmpp.jid, to: fromJid, type: 'result', id: 'iy2s986q' })
-    xmpp.send(response)
-
-    // Recibir los datos en bloques
-    let base64Data = ''
-    xmpp.on('message', (msg) => {
-      // Aquí deberías verificar que el mensaje es parte de la transferencia de archivos y tiene el SID esperado
-      const dataElement = msg.getChild('data', 'http://jabber.org/protocol/ibb')
-      if (dataElement && dataElement.attrs.sid === expectedSid) {
-        base64Data += dataElement.text()
-      }
-    })
-
-    // Esperar a que el bytestream se cierre (esto podría necesitar una implementación adicional)
-    await waitForClosure(xmpp, expectedSid)
-
-    // Decodificar y guardar los datos en un archivo
-    const fileData = Buffer.from(base64Data, 'base64')
-    const filePath = './recibidos/nombreDelArchivo.ext' // Asegúrate de asignar el nombre y extensión correctos
-
-    fs.writeFile(filePath, fileData, (err) => {
-      if (err) {
-        console.error(`Error al guardar el archivo: ${err.message}`)
-      } else {
-        console.log(`Archivo guardado con éxito en ${filePath}`)
-      }
-    })
-
-  } catch (error) {
-    console.error(`Error al recibir el archivo: ${error.message}`)
+    const fileData = await fs.readFileSync(path)
+    const encodedFileData = Buffer.from(fileData).toString('base64')
+    const message = `file://${extension}://${encodedFileData}` // se crea el mensaje
+    
+    sendMessages(xmpp, toJid, message)
+    return
+  }
+  catch(err){
+    console.log('❌ El archivo adjuntado no existe')
+    return
   }
 }
-
 
 function handleMenuOption(option) {
   switch (option) {
@@ -275,8 +162,6 @@ function handleMenuOption(option) {
       menu()
   }
 }
-
-
 
 
 async function register(username, password) {
@@ -356,6 +241,20 @@ const addContact = async (xmpp, contactJid) => {
     console.log('Solicitud de contacto enviada a', contactJid)
   } catch (error) {
     console.log('Error al agregar contacto', error)
+  }
+}
+
+const sendMessages = async (xmpp, contactJid, message) => {
+  try {
+    const messageStanza = xml(
+      'message',
+      { type: 'chat', to: contactJid + '@alumchat.xyz' },
+      xml('body', {}, message),
+    )
+    xmpp.send(messageStanza)
+    // console.log('Mensaje enviado a', contactJid)
+  } catch (error) {
+    console.log('Error al enviar mensaje', error)
   }
 }
 
@@ -445,7 +344,7 @@ async function login(jid, password) {
     switch (option) {
       case '1':
         //console.log(contacts)
-        formatContacts(xmpp)
+        formatContacts()
         secondMenu()
         break
       case '2':
@@ -468,12 +367,7 @@ async function login(jid, password) {
       case '4':
         rl.question('Introduce el JID del usuario con el que deseas chatear: ', (contactJid) => {
           rl.question('Introduce el mensaje que deseas enviar: ', (message) => {
-            const messageStanza = xml(
-              'message',
-              { type: 'chat', to: contactJid + '@alumchat.xyz' },
-              xml('body', {}, message),
-            )
-            xmpp.send(messageStanza)
+            sendMessages(xmpp, contactJid, message)
             secondMenu()
           })
         })
@@ -504,9 +398,10 @@ async function login(jid, password) {
         // Enviar/recibir archivos
 
         rl.question('Introduce el JID del usuario al que deseas enviar un archivo: ', (contactJid) => {
-          const fullJid = contactJid + '@alumchat.xyz'
+          
           rl.question('Introduce la ruta del archivo que deseas enviar: ', async (filePath) => {
-            leerArchivo(xmpp,filePath,fullJid)
+            await leerArchivo(xmpp,filePath,contactJid)
+            secondMenu()
           })
         })
         break
@@ -546,7 +441,28 @@ async function login(jid, password) {
       else if (stanza.is('message') && stanza.attrs.type === 'chat' && stanza.getChild('body')) {
         const from = stanza.attrs.from
         const message = stanza.getChildText('body')
-        console.log(`📥 Nuevo mensaje de ${from}: ${message}`)
+
+        const isFile = message.includes('file://') 
+        if (isFile) {
+          console.log(`📥 Nuevo archivo de ${from}`)
+          const fileData = message.split('//')[2]
+          const extension = message.split('//')[1].split(':')[0]
+          const decodedFileData = Buffer.from(fileData, 'base64')
+          const fileName = `${from.split('@')[0]}-${Date.now()}.${extension}`
+          const directoryPath = path.join(__dirname, './recibidos');
+
+          // Crear el directorio si no existe
+          if (!fs.existsSync(directoryPath)) {
+            fs.mkdirSync(directoryPath, { recursive: true });
+          }
+
+          //guardarlo en ./recibidos
+          fs.writeFileSync(path.join(__dirname,`./recibidos/${fileName}`), decodedFileData)
+          console.log(`📥 Nuevo archivo de ${from}: ${fileName}`)
+        }else{
+
+          console.log(`📥 Nuevo mensaje de ${from}: ${message}`)
+        }
       } 
       // Manejar mensajes de grupo
       else if (stanza.is('message') && stanza.attrs.type === 'groupchat') {
@@ -640,61 +556,9 @@ async function login(jid, password) {
         // console.log(`- ${contactJid}: ${status}`)
       })
     }
+  
+  
 
-    if (stanza.is('iq') && stanza.attrs.type === 'set' && stanza.getChild('open', 'http://jabber.org/protocol/ibb')) {
-      // Aceptar la petición de abrir el bytestream
-      const resultStanza = xml('iq', { from: xmpp.jid, to: stanza.attrs.from, type: 'result', id: stanza.attrs.id })
-      xmpp.send(resultStanza)
-    }
-  
-    if (stanza.is('message') && stanza.getChild('data', 'http://jabber.org/protocol/ibb')) {
-      // Recoger los datos de cada bloque
-      const data = stanza.getChildText('data')
-      // Concatenar los datos en el orden correcto usando el atributo seq
-      // Podrías utilizar una estructura de datos para mantener el orden correcto de los bloques
-  
-      // Después de recibir todos los bloques, puedes decodificar los datos de Base64 y procesar el archivo
-    }
-  
-    if (stanza.is('iq') && stanza.attrs.type === 'set' && stanza.getChild('close', 'http://jabber.org/protocol/ibb')) {
-      // Aceptar el cierre del bytestream y procesar el archivo completo
-      const resultStanza = xml('iq', { from: xmpp.jid, to: stanza.attrs.from, type: 'result', id: stanza.attrs.id })
-      xmpp.send(resultStanza)
-      // Aquí podrías finalizar el procesamiento del archivo
-    }
-
-    if (stanza.is('iq') && stanza.attrs.type === 'set' && stanza.getChild('open', 'http://jabber.org/protocol/ibb')) {
-      // Aceptar la petición de abrir el bytestream
-      const resultStanza = xml('iq', { from: xmpp.jid, to: stanza.attrs.from, type: 'result', id: stanza.attrs.id });
-      xmpp.send(resultStanza);
-    }
-  
-    if (stanza.is('message') && stanza.getChild('data', 'http://jabber.org/protocol/ibb')) {
-      // Recoger los datos de cada bloque
-      const data = stanza.getChildText('data');
-      // Concatenar los datos (puedes usar el atributo 'seq' para mantener el orden correcto si es necesario)
-      base64Data += data;
-    }
-  
-    if (stanza.is('iq') && stanza.attrs.type === 'set' && stanza.getChild('close', 'http://jabber.org/protocol/ibb')) {
-      // Aceptar el cierre del bytestream
-      const resultStanza = xml('iq', { from: xmpp.jid, to: stanza.attrs.from, type: 'result', id: stanza.attrs.id });
-      xmpp.send(resultStanza);
-  
-      // Decodificar y guardar los datos en un archivo
-      const fileData = Buffer.from(base64Data, 'base64');
-      const filePath = './recibidos/nombreDelArchivo.ext'; // Asegúrate de asignar el nombre y extensión correctos
-  
-      fs.writeFile(filePath, fileData, (err) => {
-        if (err) {
-          console.error(`Error al guardar el archivo: ${err.message}`);
-        } else {
-          console.log(`Archivo guardado con éxito en ${filePath}`);
-        }
-      }).then(() => {
-        base64Data = '';
-      })
-    }
 
   })
 
@@ -706,7 +570,7 @@ async function login(jid, password) {
   })
 
   xmpp.on('error',async (err) => {
-    console.error('\n\n❌', err.toString())
+    // console.error('\n\n❌', err.toString())
 
     if (err.condition === 'not-authorized') {
       console.error('❌ Autenticación fallida. Verifica tu ID de cuenta y contraseña.')
