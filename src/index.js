@@ -43,9 +43,9 @@ const cambiarEstadoUsuario = (xmpp, show, status) => {
     )
 
     xmpp.send(presenceStanza)
-    console.log(`Estado cambiado a ${show} con status ${status}`)
+    console.log(`💭 Estado cambiado a ${show} con status ${status}`)
   } catch (error) {
-    console.error(`Error al cambiar el estado y show del usuario: ${error.message}`)
+    console.error(`❌ Error al cambiar el estado y show del usuario: ${error.message}`)
   }
 }
 
@@ -181,7 +181,7 @@ async function register(username, password) {
       client.destroy()
     } else if (data.toString().includes('<error code"409" type="cancel"><conflict xmlns="urn:ietf:params:xml:ns:xmpp-stanzas"/>')) {
       // El usuario ya existe
-      console.log('El usuario ya existe, por favor elige un nombre de usuario diferente.')
+      console.log('❌ El usuario ya existe, por favor elige un nombre de usuario diferente.')
       client.destroy()
 
     }
@@ -216,9 +216,9 @@ const crearRoom = async (xmpp, roomName) => {
     )
 
     xmpp.send(configRequest)
-    console.log("Sala de chat creada exitosamente y configurada como abierta")
+    console.log("👯 Sala de chat creada exitosamente y configurada como abierta")
   } catch (error) {
-    console.log(`Error al crear la sala de chat: ${error.message}`)
+    console.log(`❌ Error al crear la sala de chat: ${error.message}`)
   }
 }
 
@@ -228,9 +228,9 @@ const unirseRoom = async (xmpp, roomName) => {
     const groupJid = `${roomName}@conference.alumchat.xyz/${xmpp.jid.local}`
     const groupStanza = xml('presence', { to: groupJid }, xml('x', { xmlns: 'http://jabber.org/protocol/muc' }))
     xmpp.send(groupStanza)
-    console.log(`Intentando unirse al grupo público ${roomName}`)
+    console.log(`👯 Intentando unirse al grupo público ${roomName}`)
   } catch (error) {
-    console.log(`Error al unirse a la sala de chat: ${error.message}`)
+    console.log(`❌ Error al unirse a la sala de chat: ${error.message}`)
   }
 }
 
@@ -238,9 +238,9 @@ const addContact = async (xmpp, contactJid) => {
   try {
     const presenceStanza =  xml('presence', { to: `${contactJid}@alumchat.xyz`, type: 'subscribe' })
     await xmpp.send(presenceStanza)
-    console.log('Solicitud de contacto enviada a', contactJid)
+    console.log('📨 Solicitud de contacto enviada a', contactJid)
   } catch (error) {
-    console.log('Error al agregar contacto', error)
+    console.log('❌ Error al agregar contacto', error)
   }
 }
 
@@ -254,7 +254,7 @@ const sendMessages = async (xmpp, contactJid, message) => {
     xmpp.send(messageStanza)
     // console.log('Mensaje enviado a', contactJid)
   } catch (error) {
-    console.log('Error al enviar mensaje', error)
+    console.log('❌ Error al enviar mensaje', error)
   }
 }
 
@@ -269,7 +269,7 @@ async function login(jid, password) {
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-  debug(xmpp, true)
+  // debug(xmpp, true)
 
   
   const secondMenu = ()=> {
@@ -334,7 +334,7 @@ async function login(jid, password) {
         
       
       default:
-        console.log('Opción no válida. Por favor, elige una opción válida.')
+        console.log('❌ Opción no válida. Por favor, elige una opción válida.')
         secondMenu()
     }
   }
@@ -412,7 +412,7 @@ async function login(jid, password) {
         cleanContacts
         break
       default:
-        console.log('Opción no válida. Por favor, elige una opción válida.')
+        console.log('❌ Opción no válida. Por favor, elige una opción válida.')
         secondMenu()
     }
   }
@@ -427,7 +427,7 @@ async function login(jid, password) {
           && stanza.getChild('x', 'http://jabber.org/protocol/muc#user').getChild('invite')) 
       {
         const roomJid = stanza.attrs.from
-        console.log(`Has sido invitado a la sala ${roomJid}`)
+        console.log(`💌 Has sido invitado a la sala ${roomJid}`)
       
         const presenceStanza = xml(
           'presence',
@@ -435,7 +435,7 @@ async function login(jid, password) {
           xml('x', { xmlns: 'http://jabber.org/protocol/muc' })
         )
         xmpp.send(presenceStanza)
-        console.log(`Te has unido a la sala ${roomJid}`)
+        console.log(`👯 Te has unido a la sala ${roomJid}`)
       }
       // Manejar mensajes 1 a 1
       else if (stanza.is('message') && stanza.attrs.type === 'chat' && stanza.getChild('body')) {
@@ -444,7 +444,6 @@ async function login(jid, password) {
 
         const isFile = message.includes('file://') 
         if (isFile) {
-          console.log(`📥 Nuevo archivo de ${from}`)
           const fileData = message.split('//')[2]
           const extension = message.split('//')[1].split(':')[0]
           const decodedFileData = Buffer.from(fileData, 'base64')
@@ -458,7 +457,7 @@ async function login(jid, password) {
 
           //guardarlo en ./recibidos
           fs.writeFileSync(path.join(__dirname,`./recibidos/${fileName}`), decodedFileData)
-          console.log(`📥 Nuevo archivo de ${from}: ${fileName}`)
+          console.log(`📃 Nuevo archivo de ${from}: ${fileName}`)
         }else{
 
           console.log(`📥 Nuevo mensaje de ${from}: ${message}`)
@@ -472,7 +471,7 @@ async function login(jid, password) {
         const body = stanza.getChildText('body')
         
         if (body) {  // Verifica si realmente hay un cuerpo en el mensaje
-            console.log(`Mensaje de ${senderNickname} en sala ${roomJid}: ${body}`)
+            console.log(`👯 Mensaje de ${senderNickname} en sala ${roomJid}:📥 ${body}`)
         }
     }
     }
@@ -484,13 +483,13 @@ async function login(jid, password) {
     }
     else if (stanza.is('presence')){
       if (stanza.attrs.type === 'subscribe'){
-        console.log(`Solicitud de suscripcion de ${stanza.attrs.from}`)
+        console.log(`🤗 Solicitud de suscripcion de ${stanza.attrs.from}`)
         xmpp.send(xml('presence', { to: stanza.attrs.from, type: 'subscribed' }))
-        console.log(`Has aceptado la solicitud de ${stanza.attrs.from}`)
+        console.log(`🤗 Has aceptado la solicitud de ${stanza.attrs.from}`)
         contacts[stanza.attrs.from] = {status: '', show: '🟢Available'}
       }
       else if (stanza.attrs.type === 'subscribed'){
-        console.log(`El usuario ${stanza.attrs.from} ha aceptado tu solicitud de suscripcion`)
+        console.log(`🤗 El usuario ${stanza.attrs.from} ha aceptado tu solicitud de suscripcion`)
       }
       else if(!stanza.attrs.type){
         const contactJid = stanza.attrs.from.split('/')[0]
