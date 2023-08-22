@@ -64,6 +64,10 @@ const cleanContacts = () => {
   for (const contact in contacts) {
     delete contacts[contact]
   }
+  for (const group in groupRoster) {
+    delete groupRoster[group]
+  }
+  return Promise.resolve()
 }
 
 // Funcion para dar formato a los contactos al mostrarlos en el CLI
@@ -180,7 +184,7 @@ async function register(username, password) {
 
   // Se verifica el usuario y se envia el registro
   client.on('data', function(data) {
-    console.log('Received: ' + data)
+    // console.log('Received: ' + data)
     if (data.toString().includes('<stream:features>')) {
       client.write('<iq type="set" id="reg1"><query xmlns="jabber:iq:register"><username>' + username + '</username><password>' + password + '</password></query></iq>')
     } else if (data.toString().includes('iq type="result" id="reg1"')) {
@@ -284,7 +288,7 @@ async function login(jid, password) {
 
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-  // debug(xmpp, true)
+  //debug(xmpp, true)
 
   // Funcion para mostrar el segundo menu de funciones
   const secondMenu = ()=> {
@@ -424,9 +428,12 @@ async function login(jid, password) {
         break
       case '8':
         // Cerrar sesion
-        await xmpp.send(xml('presence', {type: 'unavailable'}))
+        const end = await xmpp.send(xml('presence', {type: 'unavailable'}))
+        // const dobleend = cambiarEstadoUsuario(xmpp, 'unavailable', '')
+        const clean = await cleanContacts()
+        Promise.all([end,clean])
         await xmpp.stop()
-        cleanContacts
+        
         break
       default:
         console.log('❌ Opción no válida. Por favor, elige una opción válida.')
@@ -514,7 +521,7 @@ async function login(jid, password) {
       else if(!stanza.attrs.type){
         const contactJid = stanza.attrs.from.split('/')[0]
         if (contactJid !== xmpp.jid.bare().toString()) {  // Comprueba si el JID del contacto es diferente al tuyo
-          console.log(`El usuario ${contactJid} esta en tu lista de contactos`)
+          console.log(`El usuario ${contactJid} ha cambiado su estado`)
           const status = stanza.getChild('status')?.getText()
           const show = stanza.getChild('show')?.getText()
           if (status) {
@@ -530,6 +537,16 @@ async function login(jid, password) {
           //contacts[contactJid] = {status, show}
         }
       }
+      else if (stanza.attrs.type === 'unavailable'){
+        const contactJid = stanza.attrs.from.split('/')[0]
+        if (contactJid !== xmpp.jid.bare().toString()) {  // Comprueba si el JID del contacto es diferente al tuyo
+          console.log(`El usuario ${contactJid} se ha desconectado`)
+          const status = 'unavailable'
+          const show = '⚪Offline'
+          contacts[contactJid] = {status, show}
+        }
+      }
+
       // Si es una presencia de un grupo agregar al roster del grupo
       if (stanza.getChild('x', 'http://jabber.org/protocol/muc#user')) {
         const local = {}
@@ -629,7 +646,11 @@ async function deleteAccount(jid, password) {
   })
 
   xmpp.on('error', (err) => {
-    console.error('❌', err.toString())
+    // console.error('❌', err.toString())
+    if (err.condition === 'not-authorized') {
+      console.error('❌ Autenticación fallida. Verifica tu ID de cuenta y contraseña.')
+    }
+    menu()
   })
 
   xmpp.on('online', async () => {
@@ -654,7 +675,7 @@ async function deleteAccount(jid, password) {
   // Nos desconectamos y volvemos al menu 
   xmpp.on('offline', () => {
     xmpp.stop()
-    console.log('⏹', 'offline')
+    console.log('⏹', 'Desconectandote del Servidor...')
 
     menu()
 
